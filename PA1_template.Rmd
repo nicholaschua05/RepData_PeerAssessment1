@@ -5,21 +5,129 @@ output:
     keep_md: true
 ---
 
+Load required packages
+```{r, results='hide'}
+library(knitr)
+library(dplyr)
+library(ggplot2)
+```
 
 ## Loading and preprocessing the data
+Load the data and store as data:
+```{r}
+data <- read.csv("activity.csv")
+```
 
-
+Preprocess by removing NA values:
+```{r}
+data.clean <- data[with (data, { !(is.na(steps)) } ), ]
+```
 
 ## What is mean total number of steps taken per day?
+Group rows of data and sum by date:
+```{r}
+by.date <- group_by(data.clean, date)
+steps.by.date <- summarise(by.date, total=sum(steps))
+steps.by.date
+```
 
+Create histogram of the total number of steps taken each day:
+```{r}
+hist(steps.by.date$total, main="Histogram of Total nmber of steps per day", xlab="Total number of steps per day")
+```
 
+```{r}
+summary(steps.by.date)
+```
+
+**Mean total number of steps per day is 10766 with the median being 10765.**
 
 ## What is the average daily activity pattern?
 
+Preprocess data for the plotting of graph
+```{r}
+steps.by.interval <- aggregate(steps~interval, data, mean)
+```
 
+Create a time series plot of the 5-minute interval with average number of steps taken across all days
+```{r}
+plot(steps.by.interval$interval, steps.by.interval$steps, type='l', 
+     main="Mean number of steps across days", xlab="Interval", 
+     ylab="Mean number of steps")
+```
+
+```{r}
+# find row with max of steps
+max.steps.row <- which.max(steps.by.interval$steps)
+
+# find interval with this max
+steps.by.interval[max.steps.row, ]
+```
+
+**The interval 835 has the maximum average value of steps (206.1698).**
 
 ## Imputing missing values
 
+Find out how many rows of NAs
+```{r}
+sum(is.na(data))
+```
 
+**The total number of rows with NAs is 2304.**
+
+Replacing the NAs with the mean of 5 minute intervals.
+```{r}
+data.new<- data
+for(i in 1:nrow(data.new)){
+  if(is.na(data.new$steps[i])){
+    interval.value <- data.new$interval[i]
+    steps.value <- steps.by.interval[steps.by.interval$interval == interval.value,]
+    data.new$steps[i] <- steps.value$steps
+  }
+}
+```
+
+Group rows of data and sum by date (NEW w/o NAs):
+```{r}
+steps.by.date.new <- aggregate(steps ~ date, data.new, sum)
+head(steps.by.date.new)
+```
+
+Create a histogram of total number of steps per day
+```{r}
+hist(steps.by.date.new$steps, main="Histogram of total number of steps per day", xlab="Total number of steps in a day")
+```
+
+```{r}
+summary(steps.by.date.new$steps)
+summary(steps.by.date$total)
+```
+
+**The mean values stay the same with a slight difference in the median values.**
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Preprocess the data to indicate Weekday or Weekend
+```{r}
+data.new['day'] <- weekdays(as.Date(data.new$date))
+data.new$day[data.new$day  %in% c('Saturday','Sunday') ] <- "weekend"
+data.new$day[data.new$day != "weekend"] <- "weekday"
+```
+
+```{r}
+data.new$day <- as.factor(data.new$day) # convert day from character to factor
+
+# Calculate average steps by interval across all days
+steps.by.date.new <- aggregate(steps ~ interval + day, data.new, mean)
+
+# Create a line graph 
+qplot(interval, 
+      steps, 
+      data = steps.by.date.new, 
+      type = 'l', 
+      geom=c("line"),
+      xlab = "Interval", 
+      ylab = "Number of steps", 
+      main = "") +
+  facet_wrap(~ day, ncol = 1)
+```
